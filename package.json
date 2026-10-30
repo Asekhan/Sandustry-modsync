@@ -1,0 +1,12 @@
+{
+  "name": "asekhan-modsync",
+  "private": true,
+  "description": "Sandustry mod: match Workshop subscriptions to a save's mod list",
+  "scripts": {
+    "build": "node tools/build.cjs",
+    "test": "node tools/build.cjs --check && node --test tests/*.test.cjs"
+  },
+  "devDependencies": {
+    "jsdom": "^25.0.1"
+  }
+}

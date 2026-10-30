@@ -1,0 +1,12 @@
+[
+  {
+    "id": "main-menu-sync-mods",
+    "file": "js/bundle.js",
+    "operation": "insertAfter",
+    "regex": {
+      "pattern": "([A-Za-z_$][\\w$]*)&&\\(0,([A-Za-z_$][\\w$]*)\\.jsx\\)\\(([A-Za-z_$][\\w$]*),\\{id:\"main-menu-continue\",state:([A-Za-z_$][\\w$]*)\\.state,[\\s\\S]*?fadeOut\\(300\\)\\)\\}\\}\\)"
+    },
+    "code": ",$1&&(0,$2.jsx)($3,{id:\"main-menu-sync-mods\",state:$4.state,text:\"Sync Mods\",hint:\"\",onClick:()=>{const f=window.__modSyncOpen;\"function\"==typeof f&&f($1)}})",
+    "expectedMatches": 1
+  }
+]

@@ -1,0 +1,21 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Mod Sync harness</title>
+<style>body{margin:0;background:#2b3a4a;font:14px sans-serif;color:#fff;height:100vh}#loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;font-size:28px;letter-spacing:.2em;background:#0b0f16}</style>
+</head>
+<body>
+<div id="loading">LOADING…</div>
+<script>
+  // Scenario: ?s=<name>. The server injects scenarios.json.
+  window.SCENARIO = null;
+</script>
+<script src="scenario.js"></script>
+<script src="fake.js"></script>
+<script>
+  // Run the mod the way the game does: an awaited async IIFE with `sandkit` in scope.
+  window.modDone = fetch("main.js").then((r) => r.text()).then((src) =>
+    new Function("__sandkit", '"use strict";\nconst sandkit = __sandkit;\nreturn (async () => {\n' + src + "\n})();")(window.sandkit))
+    .then(() => { window.entryFinished = true; document.getElementById("loading").textContent = window.SCENARIO.world.mods ? "WORLD RUNNING" : "MAIN MENU"; });
+</script>
+</body>
+</html>
