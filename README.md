@@ -6,8 +6,9 @@ Keeps your Workshop subscriptions matched to the save you play.
   missing mods make a save "Not in sync" or stop a load.
 - **Main menu:** **Sync Mods**, under Continue, is for the save Continue opens. Its badge shows ✓
   when every mod that save needs is loaded, or how many are missing.
-- **Load window:** "Mod sync", under the world list, shows the selected save (or, before you pick
-  one, the world's newest save) as "In sync" or "Not in sync", with counts, and a **Sync…** button.
+- **Load window:** a "Mod sync" card under the world list, styled like the world cards, shows the
+  selected save (or, before you pick one, the world's newest save) as "In sync" or "Not in sync",
+  with counts, and a **Sync Mods** button.
 - **The sync window** (modelled on Factorio's "Sync mods with save") makes your mods match the
   save. It uses the game's own window, button and sound styles.
   - **Correct:** the save's mods that are loaded (folded to one line unless it's all there is).
@@ -24,6 +25,7 @@ Keeps your Workshop subscriptions matched to the save you play.
 - **On load:** a save that's missing mods stops on the same window before the world runs, with
   **Back to main menu** (nothing is saved) and **Load anyway**. Here, mods added since the save
   start ticked to **Keep**. If you only added mods since the save, it loads straight through.
+  Options > Mods turns this check off.
 - The menu button comes from `src/patches.json`, a regex patch on the game's bundle that adds a
   second copy of the Continue item. If a game update breaks it, the game reports the patch as
   failed and everything else still works.
@@ -63,14 +65,15 @@ Keeps your Workshop subscriptions matched to the save you play.
     Load window's DOM (`tests/harness/`). These need Playwright (`npm i -D playwright`, or
     `PLAYWRIGHT_MODULE=<path>`). `SHOTS=<dir>` saves screenshots.
 - `node tools/make_seed.cjs <folders of Workshop item copies>` refreshes the built-in list.
+- Steam title and description: `name` and `DESCRIPTION` in `tools/build.cjs` (plain text; it also
+  shows in the game's mod list).
 
 ## Refresh the Workshop snapshot
 
 Run `node tools/workshop_catalog.cjs --versions`, then `node tools/build.cjs`.
 
-- Needs Node 18+ and access to steamcommunity.com. A mod can't fetch Steam pages from inside the
-  game: they send no CORS headers (expected, not yet checked in game).
-- It refuses to write if its item count differs from the Workshop's total.
-- The parser is written against Steam's markup but hasn't run against the live site yet.
-- The shipped snapshot (265 items, 23 Oct 2026, no change notes) was read from the Workshop
-  pages by Claude.
+- Needs Node 18+ and access to steamcommunity.com (a mod can't fetch Steam pages from inside the
+  game).
+- It refuses to write if its item count differs from the Workshop's total. It hasn't run against
+  the live site yet.
+- Shipped snapshot: 265 items, 23 Oct 2026, no change notes.

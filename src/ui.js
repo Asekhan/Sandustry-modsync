@@ -108,7 +108,7 @@ function el(tag, props, ...kids) {
 // The game's UI sounds and button looks (0.5.6: the Load window's main button and its small text
 // buttons), so the mod's buttons look, move and sound like the game's.
 const sound = (name, opts) => { try { api.sound.play(name, Object.assign({ ignoreMute: true }, opts)); } catch (e) {} };
-const MAIN = "text-white bg-black border rounded-tr-lg rounded-bl-lg cursor-pointer shadow-md px-4 py-2 border-slate-200 border-opacity-100 " +
+const MAIN = "text-white bg-black border rounded-tr-lg rounded-bl-lg cursor-pointer shadow-md px-4 py-2 border-white border-opacity-100 " +
   "hover:border-opacity-0 item-button-transition hover:text-[#ffe700] overflow-hidden before:ease before:absolute before:right-0 before:-top-4 " +
   "before:h-20 before:w-6 before:translate-x-12 before:rotate-6 before:bg-white before:opacity-10 before:duration-700 hover:before:-translate-x-52 " +
   "relative left-0 hover:left-1 pointer-events-auto";
@@ -129,14 +129,16 @@ const check = (label, checked, onChange, props) => el("label", Object.assign({ c
 // Layout and the few looks the game has no class for. Colours are the game's: slate text, #ffe700
 // accent, #8aff4b green, #f5a623 orange. The font is the game's (inherited).
 const CSS = `
-.ms-field{padding:10px 12px;line-height:1.45;font-size:11px;color:#cbd5e1}
-.ms-label,.ms-sec{font-size:10px;letter-spacing:.1em;text-transform:uppercase;font-weight:600;color:#cbd5e1}
-.ms-label{margin-bottom:2px}
-.ms-save{color:#fff;font-weight:600;font-size:12px;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ms-field{padding:10px;display:flex;flex-direction:column;gap:6px;line-height:1.4}
+.ms-heading{padding:0 2px}
+.ms-card-off{border-color:rgba(245,166,35,.45)}.ms-card-bad{border-color:rgba(248,113,113,.45)}
+.ms-status{display:flex;align-items:center;gap:6px;margin-top:4px;font-weight:600}
+.ms-dot{width:7px;height:7px;flex:none;background:currentColor;border-radius:0 3px 0 3px}
+.ms-status.ms-dim{color:rgba(255,255,255,.8);font-weight:400}.ms-status.ms-dim .ms-dot{opacity:.4}
+.ms-sec{font-size:10px;letter-spacing:.1em;text-transform:uppercase;font-weight:600;color:#cbd5e1}
 .ms-ok{color:#8aff4b}.ms-off{color:#f5a623}.ms-bad{color:#f87171}.ms-dim{color:#cbd5e1}
-.ms-field .ms-b{margin-top:8px}
 .ms-b{font:inherit;white-space:nowrap}
-.ms-field .ms-b-main{font-size:12px;padding:4px 14px}
+.ms-field .ms-wide{width:100%;margin-top:2px;padding:6px 12px;font-size:13px;text-align:center}
 .ms-badge{position:absolute;right:9px;top:50%;transform:translateY(-50%);min-width:22px;box-sizing:border-box;text-align:center;padding:3px 6px;border-radius:0 6px 0 6px;font-size:13px;font-weight:700;line-height:1.1;letter-spacing:0;pointer-events:none}
 .ms-badge:empty{display:none}
 .ms-badge.ms-off{background:#f5a623;color:#000}.ms-badge.ms-bad{background:#f87171;color:#000}.ms-badge.ms-ok,.ms-badge.ms-dim{background:none;font-size:16px}
@@ -250,13 +252,17 @@ function cardSave(card) {
   return null;
 }
 // The selected save, or with none selected yet, the shown world's first (newest) save: it's the
-// one you're after most of the time.
+// one you're after most of the time. In 0.6.0 the selected world card has the yellow border too,
+// so only cards that carry a save count.
 function selectedHeader(body) {
-  const card = body.querySelector('[class~="border-[#ffe700]"]');
-  const picked = card && cardSave(card);
-  if (picked) return picked;
-  for (const c of body.querySelectorAll('[class~="rounded-lg"][class~="cursor-pointer"]')) { const s = cardSave(c); if (s) return s; }
-  return null;
+  let first = null;
+  for (const c of body.querySelectorAll('[class~="cursor-pointer"]')) {
+    const s = cardSave(c);
+    if (!s) continue;
+    if (c.matches('[class~="border-[#ffe700]"]')) return s;
+    first = first || s;
+  }
+  return first;
 }
 function tick() {
   paintMenuButton();
@@ -280,31 +286,38 @@ function tick() {
   }
   paintField();
 }
+// Laid out like the game's world cards above it: a "Mod sync" heading like "Worlds", a card with
+// the save's name and its status, and a full-width game button.
 function paintField() {
   if (!field || !cur) return;
   const h = cur.header;
-  const label = [el("div", { className: "ms-label" }, "Mod sync"), h && h.name ? el("div", { className: "ms-save", title: h.name }, h.name) : null];
-  if (!live) return put(field, "nolive", () => [label, el("div", { className: "ms-dim" }, "Steam Workshop unavailable")]);
-  if (!h) return put(field, "none", () => [label, el("div", { className: "ms-dim" }, "Select a save")]);
-  if (sync.saveId === h.id && sync.state === "running") return put(field, "run" + progressCount(), () => [label, el("div", { className: "ms-off" }, `Syncing… ${progressCount()}`)]);
+  // tone: ok | off | bad | dim (the dot's colour, and the card's border when off)
+  const card = (tone, status, detail, button) => [
+    el("div", { className: "ms-heading text-[10px] uppercase tracking-widest text-white/80 font-semibold" }, "Mod sync"),
+    el("div", { className: `ms-card ms-card-${tone} px-3 py-2.5 rounded-tr-lg rounded-bl-lg border bg-white/[0.06] border-white/[0.08]` },
+      h && h.name ? el("div", { className: "text-sm font-semibold text-white truncate", title: h.name }, h.name) : null,
+      el("div", { className: `ms-status ms-${tone} text-[11px]` }, el("span", { className: "ms-dot" }), status),
+      detail ? el("div", { className: "mt-0.5 text-[11px] text-white/80" }, detail) : null),
+    button || null];
+  if (!live) return put(field, "nolive", () => card("dim", "Steam Workshop unavailable"));
+  if (!h) return put(field, "none", () => card("dim", "Select a save"));
+  if (sync.saveId === h.id && sync.state === "running") return put(field, "run" + progressCount(), () => card("off", `Syncing… ${progressCount()}`));
   if (sync.saveId === h.id && sync.state === "done") {
     const bad = failedSteps().length;
-    return put(field, "done" + bad, () => [label,
-      el("div", { className: bad ? "ms-bad" : "ms-ok" }, bad ? `Synced, ${bad} failed` : sync.cancelled ? "Sync cancelled" : "Synced"),
-      el("div", { className: "ms-dim" }, "Restart to apply"),
-      btn("Quit game", () => B.quit())]);
+    return put(field, "done" + bad, () => card(bad ? "bad" : "ok", bad ? `Synced, ${bad} failed` : sync.cancelled ? "Sync cancelled" : "Synced",
+      "Restart the game to apply", btn("Quit Game", () => B.quit(), "main", { className: "ms-wide" })));
   }
-  if (cur.state === "checking") return put(field, "checking" + cur.key, () => [label, el("div", { className: "ms-dim" }, "Checking…")]);
-  if (cur.state === "error") return put(field, "error" + cur.key, () => [label, el("div", { className: "ms-bad" }, "Couldn't read this save")]);
-  // Mods added since the save don't count: loading just adds them. Sync… still offers to drop them.
+  if (cur.state === "checking") return put(field, "checking" + cur.key, () => card("dim", "Checking…"));
+  if (cur.state === "error") return put(field, "error" + cur.key, () => card("bad", "Couldn't read this save"));
+  // Mods added since the save don't count: loading just adds them. Sync Mods still offers to drop them.
   const cmp = L.compare(asWorld(cur.rec), live, ctx());
   const fetchable = cmp.fixable.length, cant = cmp.missing.length - fetchable;
+  const total = cur.rec.order.filter((e) => e.id !== L.SELF_ID).length;
   const open = () => openWindow({ mode: "loader", saveId: h.id, header: h, rec: cur.rec });
-  put(field, `${cur.key}|${cmp.inSync}|${fetchable}|${cant}|${Object.keys(mem.picks).length}`, () => [label,
-    cmp.inSync ? el("div", { className: "ms-ok" }, "✓ In sync") : el("div", { className: "ms-off" }, "Not in sync"),
-    fetchable ? el("div", { className: "ms-dim" }, `${fetchable} ready to download`) : null,
-    cant ? el("div", { className: "ms-dim" }, `${cant} can't be downloaded`) : null,
-    btn("Sync…", open, cmp.inSync ? "text" : "main", cmp.inSync ? { className: "ms-quiet" } : null)]);
+  const detail = cmp.inSync ? (total ? `${plural(total, "mod")}, all loaded` : "No mods")
+    : [fetchable && `${fetchable} ready to download`, cant && `${cant} can't be downloaded`].filter(Boolean).join(" · ");
+  put(field, `${cur.key}|${cmp.inSync}|${fetchable}|${cant}|${total}|${Object.keys(mem.picks).length}`, () =>
+    card(cmp.inSync ? "ok" : "off", cmp.inSync ? "In sync" : "Not in sync", detail, btn("Sync Mods", open, "main", { className: "ms-wide" })));
 }
 
 // ---------- the "Sync mods with save" window ----------
@@ -421,7 +434,7 @@ function paintWindow() {
     const verb = { unsubscribe: "unsubscribing", subscribe: "subscribing", download: "downloading" };
     const nowText = now ? `${nameOf(now.itemId) || now.itemId}${now.kind !== "download" ? ` (${verb[now.kind]})` : ""}${now.state === "downloading" && now.pct !== null ? ` · ${now.pct}%` : ""}` : "nothing";
     bottom.push(
-      el("div", { className: "ms-bar" }, el("div", { className: "ms-track" }, el("div", { className: "ms-fill", style: { width: pct + "%" } })), el("span", null, String(pct).padStart(3, "0") + "%")),
+      el("div", { className: "ms-bar" }, el("div", { className: "ms-track" }, el("div", { className: "ms-fill", style: { width: pct + "%" } })), el("span", null, pct + "%")),
       el("div", { className: "ms-now" }, el("span", null, el("b", null, "Currently downloading: "), nowText),
         btn("Cancel", () => { sync.cancelled = true; paintWindow(); }, "danger", { disabled: !running || sync.cancelled })));
   }
@@ -503,7 +516,7 @@ async function start() {
     B.log({ load: saveId, world: meta.worldName, missing: cmp.missing.map((r) => `${r.id}:${r.status}`) });
     if (cmp.missing.length) {
       // This window wasn't asked for: it's about the missing mods, so mods added since the save
-      // start ticked to keep (Sync Mods and Sync… start them unticked).
+      // start ticked to keep (Sync Mods, from the menu or the Load window, starts them unticked).
       const keep = new Set((cmp.extra || []).map((x) => x.id));
       await new Promise((release) => openWindow({ mode: "gate", saveId, header, world, inWorld: true, release, keep }));
     }

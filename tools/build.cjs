@@ -3,15 +3,22 @@
 // writes mod/modinfo.json, mod/patches.json (the main menu button) and mod/preview.png. `--check` fails if mod/ is stale.
 const fs = require("node:fs"), path = require("node:path"), zlib = require("node:zlib");
 const root = path.join(__dirname, ".."), src = (f) => fs.readFileSync(path.join(root, "src", f), "utf8");
-const VERSION = "0.3.0";
+const VERSION = "1.0.0";
+const DESCRIPTION = [
+  "Makes your Workshop mods match the save you want to play, like Factorio's \"Sync mods with save\".",
+  "",
+  "- Sync Mods on the main menu, and a sync status in the Load window.",
+  "- Lists the save's mods: correct, not in the save (unsubscribed unless you keep them), ready to download, and can't download (with the closest Workshop titles to pick from).",
+  "- Confirm subscribes and downloads; restart and the save opens by itself.",
+  "- Loading a save that's missing mods stops on that list before the world runs (Options > Mods to turn off).",
+  "- Mods you added since a save never count against it.",
+  "",
+  "Records each mod's Workshop id in your saves. Older saves are matched by name against the Workshop.",
+].join("\n");
 const manifest = {
   manifestVersion: 1, id: "asekhan.modsync", name: "Mod Sync: match the Workshop to your save", version: VERSION, apiVersion: 1,
   gameVersion: { minimum: "0.5.6" }, entry: "main.js", patches: "patches.json", author: "Asekhan + Claude",
-  description: "Adds Sync Mods to the main menu (for the save Continue opens) and a mod sync status to the Load window. " +
-    "Sync Mods lists the save's mods like Factorio does: correct, not in save (unsubscribed unless kept), ready to download, and can't download (with the closest Workshop titles). " +
-    "Confirm subscribes and downloads; restart the game and the save opens by itself. Mods you added since a save never count against it. " +
-    "Loading a save that's missing mods stops on the same window before the world runs. " +
-    "Writes each mod's Workshop id into your saves; for older saves the mods are matched by name against the Workshop. Adds no elements.",
+  description: DESCRIPTION,
   dependencies: [], loadOrder: 0,
   configSchema: {
     gate: { type: "boolean", default: true, labelKey: "Warn before loading a save that's missing mods",

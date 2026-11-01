@@ -153,11 +153,11 @@ test("Load window: status, Esc, and cancelling a sync", { skip }, async () => {
   await page.evaluate(() => window.openLoader());
   // nothing selected: the first save shown is checked right away
   await page.waitForFunction(() => /Not in sync/.test(document.querySelector(".ms-field")?.textContent));
-  assert.equal(await field(page), "Mod syncAutosave 3 (Test World B)Not in sync4 ready to download2 can't be downloadedSync…", "a mod added since the save isn't mentioned");
+  assert.equal(await field(page), "Mod syncAutosave 3 (Test World B)Not in sync4 ready to download · 2 can't be downloadedSync Mods", "a mod added since the save isn't mentioned");
 
   await page.click("[data-save='tidy-quicksave']");
   await page.waitForFunction(() => /In sync/.test(document.querySelector(".ms-field").textContent));
-  assert.equal(await field(page), "Mod syncQuick Save✓ In syncSync…");
+  assert.match(await field(page), /^Mod syncQuick SaveIn sync\d+ mods?, all loadedSync Mods$/);
 
   await page.click(`[data-save='${AMBER}']`);
   await page.waitForFunction(() => /Not in sync/.test(document.querySelector(".ms-field").textContent));
@@ -179,7 +179,7 @@ test("Load window: status, Esc, and cancelling a sync", { skip }, async () => {
   await page.waitForSelector("text=Cancelled.");
   assert.equal((await mem(page)).autoload, null);
   await page.getByRole("button", { name: "Back" }).click();
-  assert.equal(await field(page), "Mod syncAutosave 3 (Test World B)Sync cancelledRestart to applyQuit game");
+  assert.equal(await field(page), "Mod syncAutosave 3 (Test World B)Sync cancelledRestart the game to applyQuit Game");
   await page.click(".ms-field button");
   assert.equal((await calls(page, "quit")).length, 1);
   assert.deepEqual((await calls(page, "load")).sort(), [AMBER, "tidy-quicksave"], "each save read once");

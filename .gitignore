@@ -16,3 +16,6 @@ desktop.ini
 # Build output (attached to GitHub releases) and local-only notes
 mod/
 STATUS.md
+
+# Local only: Workshop page screenshots
+workshop/
