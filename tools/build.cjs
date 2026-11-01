@@ -5,15 +5,13 @@ const fs = require("node:fs"), path = require("node:path"), zlib = require("node
 const root = path.join(__dirname, ".."), src = (f) => fs.readFileSync(path.join(root, "src", f), "utf8");
 const VERSION = "1.0.0";
 const DESCRIPTION = [
-  "Makes your Workshop mods match the save you want to play, like Factorio's \"Sync mods with save\".",
+  "Load any save with the right mods, like Factorio's \"Sync mods with save\".",
   "",
-  "- Sync Mods on the main menu, and a sync status in the Load window.",
-  "- Lists the save's mods: correct, not in the save (unsubscribed unless you keep them), ready to download, and can't download (with the closest Workshop titles to pick from).",
-  "- Confirm subscribes and downloads; restart and the save opens by itself.",
-  "- Loading a save that's missing mods stops on that list before the world runs (Options > Mods to turn off).",
+  "Click Sync Mods on the main menu or in the Load window. Mod Sync lists what the save needs, subscribes to the missing mods and unsubscribes the extra ones you don't keep. Restart, and the save opens by itself.",
+  "",
+  "- A save that's missing mods stops before the world loads, so nothing breaks (Options > Mods to turn off).",
   "- Mods you added since a save never count against it.",
-  "",
-  "Records each mod's Workshop id in your saves. Older saves are matched by name against the Workshop.",
+  "- Finds mods by their Workshop id, or by name for older saves.",
 ].join("\n");
 const manifest = {
   manifestVersion: 1, id: "asekhan.modsync", name: "Mod Sync: match the Workshop to your save", version: VERSION, apiVersion: 1,
