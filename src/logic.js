@@ -65,7 +65,8 @@ const ModSyncLogic = (() => {
       if (!d || !isStr(d.modId)) continue;
       const itemId = d.workshop && isItemId(d.workshop.itemId) ? String(d.workshop.itemId) : null;
       if (itemId) pairs.push([d.modId, itemId, null]);
-      if (!loaded.has(d.modId) && !failed.has(d.modId)) failed.set(d.modId, { id: d.modId, itemId, code: d.code || "", message: d.message || "" });
+      if (!loaded.has(d.modId) && !failed.has(d.modId)) failed.set(d.modId, { id: d.modId, itemId, code: d.code || "", message: d.message || "",
+        deps: d.code === "missing_dependency" && Array.isArray(d.dependencies) ? d.dependencies.filter(isStr) : [] });
     }
     for (const l of localList || []) if (l && isStr(l.id) && isItemId(l.publishedFileId)) pairs.push([l.id, String(l.publishedFileId), l.name]);
     const subs = new Set();
@@ -104,20 +105,31 @@ const ModSyncLogic = (() => {
     }
     return 1 - prev[b.length] / Math.max(a.length, b.length);
   }
+  // Titles often carry a translation or tags: "Floating Islands | Fliegende Inseln [0.5.6 / 0.6.0]",
+  // "Laser Miner / 激光采掘器", "MiniPortals - Fast way for travel~". Each part is a name on its own.
+  function titleVariants(title) {
+    const t = String(title || ""), bare = t.replace(/\[[^\]]*\]|\([^)]*\)/g, " ").trim();
+    const out = new Set([t, bare]);
+    for (const part of bare.split(/\s+[|/—–-]\s+|\s*[|/]\s*/)) if (part.trim()) out.add(part.trim());
+    return [...out];
+  }
+  function titleScore(iw, ij, title) {
+    const tw = words(title), tj = tw.join("");
+    if (!tj) return 0;
+    if (ij === tj) return 1;
+    const covered = iw.filter((w) => tw.includes(w) || (w.length >= 4 && tj.includes(w))).length / iw.length;
+    const titleCovered = tw.filter((w) => ij.includes(w)).length / tw.length;
+    const short = Math.min(ij.length, tj.length), long = Math.max(ij.length, tj.length);
+    const contained = short >= 5 && (tj.includes(ij) || ij.includes(tj)) ? 0.1 + (0.9 * short) / long : 0;
+    return Math.max(covered * (0.6 + 0.4 * titleCovered), similarity(ij, tj), contained);
+  }
   function matchScore(modId, version, item) {
     const segs = modId.split("."), prefix = segs.length > 1 ? segs[0] : "";
-    const iw = words(segs.length > 1 ? segs.slice(1).join(" ") : modId), tw = words(item.title);
-    const ij = iw.join(""), tj = tw.join("");
-    if (ij.length < 3 || !tj) return 0;
-    let s;
-    if (ij === tj) s = 1;
-    else {
-      const covered = iw.filter((w) => tw.includes(w) || (w.length >= 4 && tj.includes(w))).length / iw.length;
-      const titleCovered = tw.filter((w) => ij.includes(w)).length / tw.length;
-      const short = Math.min(ij.length, tj.length), long = Math.max(ij.length, tj.length);
-      const contained = short >= 5 && (tj.includes(ij) || ij.includes(tj)) ? 0.1 + (0.9 * short) / long : 0;
-      s = Math.max(covered * (0.6 + 0.4 * titleCovered), similarity(ij, tj), contained);
-    }
+    const iw = words(segs.length > 1 ? segs.slice(1).join(" ") : modId), ij = iw.join("");
+    if (ij.length < 3) return 0;
+    let s = 0;
+    for (const t of titleVariants(item.title)) s = Math.max(s, titleScore(iw, ij, t));
+    if (!s) return 0;
     const p = words(prefix).join(""), au = words(item.author).join("");
     if (p.length >= 3 && au.length >= 3 && (au.includes(p) || p.includes(au))) s += 0.15;
     if (version && Array.isArray(item.versions) && item.versions.length) s += item.versions.includes(version) ? 0.2 : -0.1;
@@ -179,15 +191,21 @@ const ModSyncLogic = (() => {
   //  get       on the Workshop, not subscribed
   //  download  subscribed, but Steam hasn't got the files (or subscribed after this launch)
   //  failing   subscribed, the game refuses it (game version, dependency…)
+  //  waits     subscribed, refused only for missing dependencies that are all ready to download:
+  //            it loads once they're in (waitsFor). A dependency not in the save gets its own row
+  //            with neededBy.
   //  local     a local mod: only its folder brings it back
   //  unknown   no Workshop item found
   function compare(world, live, ctx) {
     ctx = Object.assign({}, ctx || {});
-    const missing = [];
-    for (const e of world.order) {
-      if (e.id === SELF_ID || live.loaded.has(e.id)) continue;
+    // A Workshop item keeps its id when its author renames the mod inside it: the save's id is
+    // then served by whatever loaded mod holds the same item (renamed: save id -> loaded id).
+    const byItem = new Map(), renamed = new Map();
+    for (const m of live.loaded.values()) if (m.itemId) byItem.set(m.itemId, m.id);
+    const row = (e) => {
       const f = live.failed.get(e.id), local = world.local.includes(e.id);
       const res = local ? null : resolve(e.id, e.version, world, live, ctx);
+      if (res && byItem.has(res.itemId)) { renamed.set(e.id, byItem.get(res.itemId)); return null; }
       let status;
       if (f && NOT_DOWNLOADED.has(f.code) && res) status = "download";
       else if (f) status = "failing";
@@ -195,13 +213,40 @@ const ModSyncLogic = (() => {
       else if (res) status = "get";
       else status = local ? "local" : "unknown";
       const suggest = status === "unknown" && ctx.workshop ? suggestWorkshop(e.id, e.version, ctx.workshop, owned(world, live, ctx)) : [];
-      missing.push({ id: e.id, version: e.version, status, itemId: res ? res.itemId : null, name: (res && res.name) || null,
-        source: res ? res.source : null, problem: f ? f.message : null, suggest });
+      return { id: e.id, version: e.version, status, itemId: res ? res.itemId : null, name: (res && res.name) || null,
+        source: res ? res.source : null, problem: f ? f.message : null, suggest };
+    };
+    const missing = [], byId = new Map();
+    for (const e of world.order) {
+      if (e.id === SELF_ID || live.loaded.has(e.id) || byId.has(e.id)) continue;
+      const r = row(e);
+      if (r) { missing.push(r); byId.set(r.id, r); }
     }
+    // Mods the game refused for a missing dependency: the dependency is missing too, in the save or not.
+    for (let i = 0; i < missing.length; i++) {
+      const r = missing[i], f = live.failed.get(r.id);
+      if (r.status !== "failing" || !f || !f.deps || !f.deps.length) continue;
+      const deps = [];
+      for (const id of f.deps) {
+        if (live.loaded.has(id) || id === SELF_ID) continue;
+        let d = byId.get(id);
+        if (!d) { d = row({ id, version: "" }); if (!d) continue; missing.push(d); byId.set(id, d); }
+        (d.neededBy || (d.neededBy = [])).push(r.id);
+        deps.push(d.id);
+      }
+      if (deps.length) r.waitsFor = deps;
+    }
+    const comes = (id) => { const d = byId.get(id); return d.status === "get" || d.status === "download" || d.status === "waits"; };
+    for (let changed = true; changed;) {
+      changed = false;
+      for (const r of missing) if (r.status === "failing" && r.waitsFor && r.waitsFor.every(comes)) { r.status = "waits"; changed = true; }
+    }
+    for (const r of missing) if (r.status !== "waits") delete r.waitsFor;
     let extra = null;
     const base = ctx.inWorld ? world.known : world.order.map((e) => e.id);
     if (base) {
       const baseSet = new Set(base), needed = new Set();
+      for (const id of base) if (renamed.has(id)) baseSet.add(renamed.get(id));
       for (const id of baseSet) { const m = live.loaded.get(id); if (m) for (const d of m.deps) needed.add(d); }
       extra = [];
       for (const m of live.loaded.values()) {
@@ -211,7 +256,7 @@ const ModSyncLogic = (() => {
     }
     const fixable = missing.filter((r) => r.status === "get" || r.status === "download");
     const removable = (extra || []).filter((x) => x.canUnsubscribe);
-    return { missing, extra, fixable, removable, inSync: missing.length === 0 };
+    return { missing, extra, fixable, removable, renamed, inSync: missing.length === 0 };
   }
 
   // The Steam actions for the player's choice: every fixable missing mod except `skip`, and the

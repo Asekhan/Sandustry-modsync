@@ -17,8 +17,37 @@ function decode(s) {
     .replace(/\s+/g, " ").trim();
 }
 
+// Every object in v, decoding strings that hold JSON (Steam's SSR blob nests JSON in strings).
+function* walk(v) {
+  if (typeof v === "string") {
+    const t = v.trimStart();
+    if (t[0] === "{" || t[0] === "[") { let j; try { j = JSON.parse(t); } catch (e) { return; } yield* walk(j); }
+  } else if (Array.isArray(v)) { for (const x of v) yield* walk(x); }
+  else if (v && typeof v === "object") { yield v; for (const x of Object.values(v)) yield* walk(x); }
+}
+
+// The browse page since its late-2026 redesign: hashed class names, but the results, with their
+// authors beside them, sit as JSON in <script id="valve-ssr-data">.
+function parseSsr(html) {
+  const m = html.match(/<script[^>]*id="valve-ssr-data"[^>]*>([\s\S]*?)<\/script>/);
+  if (!m) return null;
+  let blob; try { blob = JSON.parse(m[1]); } catch (e) { return null; }
+  const items = []; let total = null;
+  for (const d of walk(blob)) {
+    const res = d.results;
+    if (!Array.isArray(res) || !res.length || !res[0] || res[0].publishedfileid === undefined) continue;
+    if (typeof d.total_count === "number") total = d.total_count;
+    const names = new Map();
+    for (const p of d.creator_player_link_details || []) { const pub = (p && p.public_data) || {}; if (pub.steamid) names.set(pub.steamid, pub.persona_name || ""); }
+    for (const r of res) if (r.publishedfileid && r.title) items.push({ id: String(r.publishedfileid), title: decode(r.title), author: names.get(r.creator) || "" });
+  }
+  return items.length ? { items, total } : null;
+}
+
 // One browse page -> {items: [{id, title, author}], total}
 function parseListing(html) {
+  const ssr = parseSsr(html);
+  if (ssr) return ssr;
   const items = [];
   for (const block of html.split(/<div class="workshopItem"/).slice(1)) {
     const id = (block.match(/data-publishedfileid="(\d+)"/) || block.match(/filedetails\/\?id=(\d+)/) || [])[1];
@@ -61,6 +90,9 @@ async function main() {
     await sleep(800);
   }
   if (!total || items.length !== total) throw new Error(`parsed ${items.length} items, the Workshop reports ${total}: the page layout probably changed. Nothing written.`);
+  let prev = {};
+  try { for (const it of JSON.parse(fs.readFileSync(out, "utf8")).items) prev[it.id] = it; } catch (e) {}
+  if (!process.argv.includes("--versions")) for (const it of items) if (prev[it.id] && prev[it.id].versions) it.versions = prev[it.id].versions;
   if (process.argv.includes("--versions")) {
     for (const [i, it] of items.entries()) {
       it.versions = parseChangelog(await get(`https://steamcommunity.com/sharedfiles/filedetails/changelog/${it.id}`));
@@ -71,7 +103,7 @@ async function main() {
   items.sort((a, b) => a.id.localeCompare(b.id));
   const src = `steamcommunity.com/workshop/browse/?appid=${APP} (ready-to-use items)` + (process.argv.includes("--versions") ? " + change notes" : "");
   fs.writeFileSync(out, `{\n  "source": ${JSON.stringify(src)},\n  "fetched": ${JSON.stringify(new Date().toISOString().slice(0, 10))},\n  "items": [\n` +
-    items.map((it) => "    " + JSON.stringify(it)).join(",\n") + "\n  ]\n}\n");
+    items.map((it) => "    {" + Object.entries(it).map(([k, v]) => `${JSON.stringify(k)}: ${JSON.stringify(v)}`).join(", ") + "}").join(",\n") + "\n  ]\n}\n");
   console.log(`src/workshop.json: ${items.length} items. Rebuild with node tools/build.cjs`);
 }
 

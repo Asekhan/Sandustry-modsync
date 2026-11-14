@@ -3,7 +3,7 @@
 // writes mod/modinfo.json, mod/patches.json (the main menu button) and mod/preview.png. `--check` fails if mod/ is stale.
 const fs = require("node:fs"), path = require("node:path"), zlib = require("node:zlib");
 const root = path.join(__dirname, ".."), src = (f) => fs.readFileSync(path.join(root, "src", f), "utf8");
-const VERSION = "1.0.0";
+const VERSION = "1.1.0";
 const DESCRIPTION = [
   "Load any save with the right mods, like Factorio's \"Sync mods with save\".",
   "",

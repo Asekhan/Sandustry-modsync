@@ -311,7 +311,7 @@ function paintField() {
   if (cur.state === "error") return put(field, "error" + cur.key, () => card("bad", "Couldn't read this save"));
   // Mods added since the save don't count: loading just adds them. Sync Mods still offers to drop them.
   const cmp = L.compare(asWorld(cur.rec), live, ctx());
-  const fetchable = cmp.fixable.length, cant = cmp.missing.length - fetchable;
+  const fetchable = cmp.fixable.length, cant = cmp.missing.filter((r) => !comes(r)).length;
   const total = cur.rec.order.filter((e) => e.id !== L.SELF_ID).length;
   const open = () => openWindow({ mode: "loader", saveId: h.id, header: h, rec: cur.rec });
   const detail = cmp.inSync ? (total ? `${plural(total, "mod")}, all loaded` : "No mods")
@@ -346,6 +346,8 @@ function nameOf(itemId) {
   const w = WORKSHOP.items.find((it) => it.id === itemId);
   return w ? w.title : null;
 }
+const comes = (r) => r.status === "get" || r.status === "download" || r.status === "waits"; // loads after the sync
+const nameOfMod = (id) => { const m = live && live.loaded.get(id); return (m && m.name) || id; };
 const sec = (cls, text, onClick) => el("div", { className: "ms-sec " + cls + (onClick ? " ms-fold" : ""), onClick }, text);
 function windowList(w, world, cmp, locked) {
   const list = [];
@@ -366,24 +368,31 @@ function windowList(w, world, cmp, locked) {
         : el("span", null, x.local ? "local mod, stays" : "not subscribed"))));
   }
 
-  const ready = cmp.missing.filter((r) => r.status === "get" || r.status === "download");
+  const ready = cmp.missing.filter(comes);
   if (ready.length) {
     list.push(sec("good", `Ready to download (${ready.length})`));
     for (const r of ready) {
+      if (r.status === "waits") {
+        list.push(el("div", { className: "ms-row" }, el("span", { className: "ms-name", title: r.id }, r.name || nameOf(r.itemId) || r.id), el("span", { className: "ms-col" }, "subscribed")));
+        list.push(el("div", { className: "ms-sub" }, r.id, " · loads once its dependencies are in: ", r.waitsFor.join(", ")));
+        continue;
+      }
       list.push(el("div", { className: "ms-row" }, el("span", { className: "ms-name", title: r.id }, r.name || nameOf(r.itemId) || r.id),
         el("span", { className: "ms-col" }, check("Download", !w.skip.has(r.id), (on) => { on ? w.skip.delete(r.id) : w.skip.add(r.id); paintWindow(); }, { disabled: locked }))));
       list.push(el("div", { className: "ms-sub" }, r.id, r.version ? ` v${r.version}` : "", " · ", itemLink(r.itemId),
         r.status === "download" ? " · subscribed, files missing" : src[r.source] ? ` · ${src[r.source]}` : "",
+        r.neededBy ? ` · needed by ${r.neededBy.map(nameOfMod).join(", ")}` : "",
         r.source === "picked" && !locked ? [" · ", el("span", { className: "ms-link", onClick: () => { delete mem.picks[r.id]; saveMem(); paintAll(); } }, "undo")] : null));
     }
   }
 
-  const cant = cmp.missing.filter((r) => r.status !== "get" && r.status !== "download");
+  const cant = cmp.missing.filter((r) => !comes(r));
   if (cant.length) {
     list.push(sec("bad", `Can't download (${cant.length})`));
     for (const r of cant) {
       list.push(el("div", { className: "ms-row" }, el("span", { className: "ms-name", title: r.id }, r.name || r.id), el("span", { className: "ms-col" }, r.version ? "v" + r.version : "")));
-      list.push(el("div", { className: "ms-sub" }, (r.name ? r.id + " · " : "") + why[r.status] + (r.problem ? ": " + r.problem : "")));
+      list.push(el("div", { className: "ms-sub" }, (r.name ? r.id + " · " : "") + why[r.status] + (r.problem ? ": " + r.problem : "") +
+        (r.neededBy ? ` · needed by ${r.neededBy.map(nameOfMod).join(", ")}` : "")));
       if (r.status !== "unknown" || locked) continue;
       for (const s of r.suggest) list.push(el("div", { className: "ms-opt" }, "Maybe ", el("b", null, s.title), ` by ${s.author} · `, itemLink(s.itemId), " ",
         btn("Use", () => { mem.picks[r.id] = { itemId: s.itemId, name: s.title }; saveMem(); paintAll(); }, "text")));

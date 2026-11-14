@@ -55,6 +55,55 @@ test("a dependency of a save's mod is never an extra", () => {
   assert.equal(cmp.inSync, true);
 });
 
+test("a mod renamed inside the same Workshop item counts as present, and is never an extra", () => {
+  const world = L.readSaveMods(Object.assign(order("old.carto"), { [L.SELF_ID]: { items: { "old.carto": "1000000007" } } }));
+  const live = L.readLive(discovery([["new.carto", "2", "1000000007"]]), ["1000000007"], []);
+  const cmp = L.compare(world, live, {});
+  assert.deepEqual(cmp.missing, [], "not 'download': that would re-download it and restart forever");
+  assert.deepEqual(cmp.extra, [], "not offered for unsubscribe");
+  assert.equal(cmp.inSync, true);
+  assert.equal(L.plan(cmp).count, 0);
+});
+
+test("a mod refused for a missing dependency waits for it, and the dependency is fetched even when the save never had it", () => {
+  const world = L.readSaveMods(order("a", "b"));
+  const live = L.readLive(discovery([], [
+    { code: "missing_dependency", modId: "a", message: "Dependencies are missing: lib", dependencies: ["lib"], workshop: { itemId: "1000000001" } },
+    { code: "missing_dependency", modId: "b", message: "Dependencies are missing: nowhere", dependencies: ["nowhere"], workshop: { itemId: "1000000002" } },
+  ]), ["1000000001", "1000000002"], []);
+  const cmp = L.compare(world, live, { catalog: { lib: { itemId: "1000000003", name: "Lib" } } });
+  const by = Object.fromEntries(cmp.missing.map((r) => [r.id, r]));
+  assert.deepEqual(Object.fromEntries(cmp.missing.map((r) => [r.id, r.status])), { a: "waits", b: "failing", lib: "get", nowhere: "unknown" });
+  assert.deepEqual(by.a.waitsFor, ["lib"]);
+  assert.deepEqual(by.lib.neededBy, ["a"]);
+  assert.equal(by.b.waitsFor, undefined, "a dependency nobody can download leaves it refused");
+  assert.deepEqual(L.plan(cmp), { subscribe: ["1000000003"], download: [], unsubscribe: [], count: 1 });
+});
+
+test("a dependency that itself waits on a downloadable one still counts as coming", () => {
+  const live = L.readLive(discovery([], [
+    { code: "missing_dependency", modId: "a", dependencies: ["mid"], workshop: { itemId: "1000000001" } },
+    { code: "missing_dependency", modId: "mid", dependencies: ["base"], workshop: { itemId: "1000000002" } },
+  ]), ["1000000001", "1000000002"], []);
+  const cmp = L.compare(L.readSaveMods(order("a")), live, { catalog: { base: { itemId: "1000000003" } } });
+  assert.deepEqual(Object.fromEntries(cmp.missing.map((r) => [r.id, r.status])), { a: "waits", mid: "waits", base: "get" });
+});
+
+test("a mod published after the old snapshot is found by its exact title and author", () => {
+  assert.equal((L.matchWorkshop("HMIMH.balancers-balance", "", table) || {}).itemId, "3830865329");
+});
+
+test("a title with a translation or version tags still matches its plain name", () => {
+  const t = { items: [
+    { id: "3796688372", title: "Floating Islands | Fliegende Inseln [0.5.6 / 0.6.0]", author: "Fanghur" },
+    { id: "3790485380", title: "Laser Miner / 激光采掘器", author: "PinkYuDeer" },
+    { id: "3838863200", title: "MiniPortals - Fast way for travel~", author: "Vionevi" },
+  ] };
+  assert.equal((L.matchWorkshop("fanghur.floating-islands", "", t) || {}).itemId, "3796688372");
+  assert.equal((L.matchWorkshop("pinkyudeer.laserminer", "", t) || {}).itemId, "3790485380");
+  assert.equal((L.matchWorkshop("vionevi.miniportals", "", t) || {}).itemId, "3838863200");
+});
+
 test("in a loading world, extras come from this mod's own list, not the game's merged order", () => {
   const mods = order("a", "new");
   const live = L.readLive(discovery([["a", "1", "1000000001"], ["new", "1", "1000000002"]]), ["1000000001", "1000000002"], []);
