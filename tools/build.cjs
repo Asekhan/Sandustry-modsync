@@ -1,7 +1,7 @@
 "use strict";
 // Bundles src/ into mod/main.js (a mod entry runs inside an async IIFE: no import/export) and
-// writes mod/modinfo.json, mod/patches.json (the main menu button) and mod/preview.png. `--check` fails if mod/ is stale.
-const fs = require("node:fs"), path = require("node:path"), zlib = require("node:zlib");
+// writes mod/modinfo.json, mod/patches.json (the main menu button) and mod/preview.png (copied from workshop/). `--check` fails if mod/ is stale.
+const fs = require("node:fs"), path = require("node:path");
 const root = path.join(__dirname, ".."), src = (f) => fs.readFileSync(path.join(root, "src", f), "utf8");
 const VERSION = "1.1.0";
 const DESCRIPTION = [
@@ -34,27 +34,9 @@ const bundle = [
   src("bridge.js"), src("ui.js"),
 ].join("\n");
 
-// Preview: two columns of mod tiles linked by arrows (save ⇄ Workshop).
-function png(w, hgt, pixel) {
-  const crcT = new Uint32Array(256).map((_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
-  const crc = (b) => { let c = ~0; for (const x of b) c = crcT[(c ^ x) & 255] ^ (c >>> 8); return ~c >>> 0; };
-  const chunk = (t, d) => { const l = Buffer.alloc(4), c = Buffer.alloc(4), td = Buffer.concat([Buffer.from(t), d]); l.writeUInt32BE(d.length); c.writeUInt32BE(crc(td)); return Buffer.concat([l, td, c]); };
-  const raw = Buffer.alloc(hgt * (1 + w * 3));
-  for (let y = 0; y < hgt; y++) for (let x = 0; x < w; x++) raw.set(pixel(x, y), y * (1 + w * 3) + 1 + x * 3);
-  const ih = Buffer.alloc(13); ih.writeUInt32BE(w, 0); ih.writeUInt32BE(hgt, 4); ih[8] = 8; ih[9] = 2;
-  return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", ih), chunk("IDAT", zlib.deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]);
-}
-const preview = png(256, 256, (x, y) => {
-  const bg = [22, 27, 38];
-  const tileL = x >= 28 && x < 100 && ((y - 36) % 40) < 28 && y >= 36 && y < 236;
-  const tileR = x >= 156 && x < 228 && ((y - 36) % 40) < 28 && y >= 36 && y < 236;
-  const row = Math.floor((y - 36) / 40);
-  if (tileL) return row === 2 ? [253, 186, 116] : [61, 111, 176];
-  if (tileR) return row === 2 ? [70, 80, 100] : [61, 111, 176];
-  const mid = y >= 36 && y < 236 && ((y - 36) % 40) >= 12 && ((y - 36) % 40) < 16 && x >= 106 && x < 150;
-  if (mid) return row === 2 ? [253, 186, 116] : [159, 226, 154];
-  return bg;
-});
+// Preview: the Workshop main image (Industry and ruins cover, with the Fox Hazard logo corner).
+// Earlier builds drew a 256 px placeholder here, which overwrote the cover on every build.
+const preview = fs.readFileSync(path.join(root, "workshop", "cover-industry-v3.png"));
 
 const out = { "main.js": bundle, "modinfo.json": JSON.stringify(manifest, null, 2) + "\n", "patches.json": src("patches.json") };
 JSON.parse(out["patches.json"]); // fail early on a broken patch file
