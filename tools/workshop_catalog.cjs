@@ -72,8 +72,12 @@ async function get(url) {
   for (let attempt = 1; ; attempt++) {
     const r = await fetch(url, { headers: { "user-agent": "Mozilla/5.0 (modsync workshop catalog)", "accept-language": "en-US" } });
     if (r.ok) return r.text();
-    if (attempt === 3) throw new Error(`HTTP ${r.status} for ${url}`);
-    await sleep(2000 * attempt);
+    // 429: Steam rate-limits the change-notes pages after a few hundred quick requests; wait it out.
+    const limited = r.status === 429 || r.status === 503;
+    if (attempt === (limited ? 8 : 3)) throw new Error(`HTTP ${r.status} for ${url}`);
+    const wait = limited ? Math.max(Number(r.headers.get("retry-after")) * 1000 || 0, 15000 * attempt) : 2000 * attempt;
+    if (limited) console.log(`HTTP ${r.status}: Steam asks to slow down, waiting ${Math.round(wait / 1000)} s`);
+    await sleep(wait);
   }
 }
 
@@ -97,7 +101,7 @@ async function main() {
     for (const [i, it] of items.entries()) {
       it.versions = parseChangelog(await get(`https://steamcommunity.com/sharedfiles/filedetails/changelog/${it.id}`));
       if ((i + 1) % 25 === 0) console.log(`change notes: ${i + 1}/${items.length}`);
-      await sleep(400);
+      await sleep(1200);
     }
   }
   items.sort((a, b) => a.id.localeCompare(b.id));
