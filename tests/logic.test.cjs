@@ -188,7 +188,8 @@ test("title matching never picks a wrong item (41 mods with known Workshop ids)"
     const m = L.matchWorkshop(id, null, table, seedOwned(id));
     if (m) { found++; assert.equal(m.itemId, itemId, id); }
   }
-  assert.ok(found >= 25, `only ${found} matches`);
+  // 25 on the 14 Nov list; gerbesh's three sandustry-labs mods left the Workshop by 26 Nov (24 since)
+  assert.ok(found >= 22, `only ${found} matches`);
 });
 
 test("the unresolved mods of the real saves match their real Workshop items", () => {
